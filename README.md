@@ -146,8 +146,8 @@ This project is for **academic and educational purposes**. Dataset ownership rem
 
 ## Authors
 
-Group X
-Final Project – Predictive Analytics
+
+Basith M and Thanuja B 
 
 ---
 
