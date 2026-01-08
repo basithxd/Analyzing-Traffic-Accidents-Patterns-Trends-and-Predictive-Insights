@@ -1,0 +1,508 @@
+---
+title: 'Group X Final Project '
+output:
+  html_notebook: default
+  pdf_document: default
+Dataset: "https://www.kaggle.com/datasets/daveianhickey/2000-16-traffic-flow-england-scotland-wales"
+---
+
+# **Analyzing Traffic Accidents: Patterns, Trends, and Predictive Insights**
+
+## Importing Datasets and Libraries
+
+```{r}
+library(randomForest) 
+library(Rborist) 
+library(rpart)  
+library(rpart.plot) 
+library(dplyr) 
+library(vip)  
+library(foreach) 
+library(doParallel) 
+library(caret)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r}
+# Read each dataset 
+data1 <- read.csv("accidents_2005_to_2007.csv", stringsAsFactors = FALSE) 
+data2 <- read.csv("accidents_2009_to_2011.csv", stringsAsFactors = FALSE) 
+data3 <- read.csv("accidents_2012_to_2014.csv", stringsAsFactors = FALSE)   
+# Combine them into one dataframe 
+data <- rbind(data1, data2, data3)   
+rm(data1) 
+rm(data2) 
+rm(data3)
+```
+
+```         
+```
+
+### Data Cleanup
+
+```{r}
+dataTime <- data[,c("Date","Day_of_Week","Time")]
+
+cols_to_keep <- c(
+ "Police_Force", "Accident_Severity", "Number_of_Vehicles","Number_of_Casualties", "Road_Type", "Speed_limit", "Junction_Control",
+  "Pedestrian_Crossing.Human_Control", "Pedestrian_Crossing.Physical_Facilities",
+  "Light_Conditions", "Weather_Conditions", "Road_Surface_Conditions",
+  "Special_Conditions_at_Site", "Carriageway_Hazards", "Urban_or_Rural_Area",
+  "Did_Police_Officer_Attend_Scene_of_Accident"
+)
+
+data <- data[, cols_to_keep]
+
+
+categorical_cols <- c(
+"Accident_Severity", "Road_Type", "Speed_limit", "Junction_Control","Pedestrian_Crossing.Human_Control", "Pedestrian_Crossing.Physical_Facilities","Light_Conditions", "Weather_Conditions", "Road_Surface_Conditions","Special_Conditions_at_Site", "Carriageway_Hazards", "Urban_or_Rural_Area","Did_Police_Officer_Attend_Scene_of_Accident"
+)
+
+data[categorical_cols] <- lapply(data[categorical_cols], as.factor)
+```
+
+```{r}
+summary(data)
+```
+
+```{r}
+missing_counts <- colSums(is.na(data)) 
+missing_counts
+```
+
+### Research Question 1: Predicting Accident Severity with road conditions
+
+#### Random Forest Regression
+
+```{r}
+run_rf_analysis <- function(data, mtry, ntree, exclude_cols = NULL) {
+  #' Run Random Forest analysis with fixed sampling parameters
+  #'
+  #' @param data Input data frame (must contain 'Accident_Severity' column)
+  #' @param mtry Number of variables tried at each split
+  #' @param ntree Number of trees to grow
+  #' @param exclude_cols Vector of column names to exclude from predictors
+  
+  # Set fixed parameters
+  sample_fraction <- 0.01
+  train_frac <- 0.7
+  target_var <- "Accident_Severity"
+  
+  # Sample data
+  reduced_data <- data[sample(nrow(data), size = round(sample_fraction * nrow(data))), ]
+  
+  # Split into train/test
+  index <- sample(1:nrow(reduced_data), round(nrow(reduced_data) * train_frac))
+  train <- reduced_data[index, ]
+  test <- reduced_data[-index, ]
+  
+  # Remove excluded columns from predictors
+  if(!is.null(exclude_cols)) {
+    predictors <- setdiff(names(train), c(target_var, exclude_cols))
+    formula <- as.formula(paste(target_var, "~", paste(predictors, collapse = "+")))
+  } else {
+    formula <- as.formula(paste(target_var, "~ ."))
+  }
+  
+  # Build RF model
+  rf_model <- randomForest(formula,
+                         data = train,
+                         mtry = mtry,
+                         ntree = ntree,
+                         importance = TRUE)
+  
+  # Model evaluation
+  test_predictions <- predict(rf_model, newdata = test)
+  conf_matrix <- confusionMatrix(test_predictions, test[[target_var]])
+  
+  # Return results as list
+  return(list(
+    model = rf_model,
+    train = train,
+    test = test,
+    predictions = test_predictions,
+    confusion_matrix = conf_matrix,
+    accuracy = conf_matrix$overall['Accuracy'],
+    importance = importance(rf_model)
+  ))
+}
+```
+
+```{r}
+results1 <- run_rf_analysis(data = data, mtry = 8, ntree = 600, exclude_cols = c("Police_Force"))
+results2 <- run_rf_analysis(data = data, mtry = 6, ntree = 600, exclude_cols = c("Police_Force"))
+results3 <- run_rf_analysis(data = data, mtry = 10, ntree = 600, exclude_cols = c("Police_Force"))
+
+# Access results:
+results1$accuracy         # Test accuracy
+results2$accuracy 
+results3$accuracy 
+
+```
+
+```{r}
+varImpPlot(results1$model)
+results1$importance
+```
+
+### Research Question 2: Predicting Number of Casualties with road conditions
+
+```{r}
+run_casualty_rf <- function(data, mtry, ntree, exclude_cols = NULL, seed = NULL) {
+  #' Run Random Forest regression for Number_of_Casualties prediction
+  #'
+  #' @param data Input data frame
+  #' @param mtry Number of variables tried at each split
+  #' @param ntree Number of trees to grow
+  #' @param exclude_cols Vector of column names to exclude from predictors
+  #' @param seed Optional random seed for reproducibility
+  
+  # Set seed if provided
+  if (!is.null(seed)) set.seed(seed)
+  
+  # Fixed parameters
+  sample_fraction <- 0.001
+  train_frac <- 0.7
+  target_var <- "Number_of_Casualties"
+  
+  # Sample data
+  reduced_data <- data[sample(nrow(data), size = round(sample_fraction * nrow(data))), ]
+  
+  # Split into train/test
+  index <- sample(1:nrow(reduced_data), round(nrow(reduced_data) * train_frac))
+  train <- reduced_data[index, ]
+  test <- reduced_data[-index, ]
+  
+  # Remove excluded columns
+  if (!is.null(exclude_cols)) {
+    predictors <- setdiff(names(train), c(target_var, exclude_cols))
+    formula <- as.formula(paste(target_var, "~", paste(predictors, collapse = "+")))
+  } else {
+    formula <- as.formula(paste(target_var, "~ ."))
+  }
+  
+  # Build RF model
+  rf_model <- randomForest(formula,
+                          data = train,
+                          mtry = mtry,
+                          ntree = ntree,
+                          importance = TRUE)
+  
+  # Generate predictions
+  test_predictions <- predict(rf_model, newdata = test)
+  
+  # Calculate metrics
+  rmse <- sqrt(mean((test_predictions - test[[target_var]])^2))
+  r_squared <- cor(test_predictions, test[[target_var]])^2
+  
+  # Visualization
+  varImpPlot(rf_model, main = "Variable Importance for Casualty Prediction")
+  
+  # Return results
+  return(list(
+    model = rf_model,
+    train = train,
+    test = test,
+    predictions = test_predictions,
+    rmse = rmse,
+    r_squared = r_squared,
+    importance = importance(rf_model),
+    formula = formula
+  ))
+}
+```
+
+```{r}
+casualty_results1 <- run_casualty_rf(data = data,mtry = 4,ntree = 600,exclude_cols = c("Police_Force", "Accident_Severity", "Number_of_Vehicles","Number_of_Casualties", "Road_Type", "Speed_limit", "Junction_Control",
+  "Pedestrian_Crossing.Human_Control", "Pedestrian_Crossing.Physical_Facilities",
+  "Light_Conditions", "Weather_Conditions", "Road_Surface_Conditions",
+  "Special_Conditions_at_Site", "Carriageway_Hazards", "Urban_or_Rural_Area"))
+
+casualty_results2 <- run_casualty_rf(data = data,mtry = 8,ntree = 600,exclude_cols = c("Police_Force", "Accident_Severity"))
+casualty_results3 <- run_casualty_rf(data = data,mtry = 6,ntree = 600,exclude_cols = c("Police_Force", "Accident_Severity"))
+
+casualty_results1$rmse
+casualty_results2$rmse
+casualty_results3$rmse
+```
+
+```{r}
+casualty_results1$r_squared
+casualty_results2$r_squared
+casualty_results3$r_squared
+```
+
+### Research Question 3: Forecasting Police Response
+
+```{r}
+run_police_force_rf <- function(data, mtry, ntree, exclude_cols = NULL, seed = NULL) {
+  #' Run Random Forest regression for numeric Police_Force prediction
+  #'
+  #' @param data Input data frame
+  #' @param mtry Number of variables tried at each split
+  #' @param ntree Number of trees to grow
+  #' @param exclude_cols Vector of column names to exclude from predictors
+  #' @param seed Optional random seed for reproducibility
+  
+  # Set seed if provided
+  if (!is.null(seed)) set.seed(seed)
+  
+  # Fixed parameters
+  sample_fraction <- 0.01
+  train_frac <- 0.7
+  target_var <- "Police_Force"
+  
+  # Sample data
+  reduced_data <- data[sample(nrow(data), size = round(sample_fraction * nrow(data))), ]
+  
+  # Split into train/test
+  index <- sample(1:nrow(reduced_data), round(nrow(reduced_data) * train_frac))
+  train <- reduced_data[index, ]
+  test <- reduced_data[-index, ]
+  
+  # Remove excluded columns
+  if (!is.null(exclude_cols)) {
+    predictors <- setdiff(names(train), c(target_var, exclude_cols))
+    formula <- as.formula(paste(target_var, "~", paste(predictors, collapse = "+")))
+  } else {
+    formula <- as.formula(paste(target_var, "~ ."))
+  }
+  
+  # Build RF model
+  rf_model <- randomForest(formula,
+                         data = train,
+                         mtry = mtry,
+                         ntree = ntree,
+                         importance = TRUE)
+  
+  # Generate predictions
+  test_predictions <- predict(rf_model, newdata = test)
+  
+  # Calculate regression metrics
+  rmse <- sqrt(mean((test_predictions - test[[target_var]])^2))
+  
+  # Proper R² calculation (1 - SSE/SST)
+  SSE <- sum((test[[target_var]] - test_predictions)^2)
+  SST <- sum((test[[target_var]] - mean(test[[target_var]]))^2)
+  r_squared <- 1 - (SSE/SST)
+  
+  # Visualization
+  varImpPlot(rf_model, main = "Variable Importance for Police Force Prediction")
+  
+  # Actual vs Predicted plot
+  plot(test[[target_var]], test_predictions,
+       main = "Actual vs Predicted Police Force",
+       xlab = "Actual", ylab = "Predicted")
+  abline(0, 1, col = "red")
+  
+  # Return results
+  return(list(
+    model = rf_model,
+    train = train,
+    test = test,
+    predictions = test_predictions,
+    rmse = rmse,
+    r_squared = r_squared,
+    importance = importance(rf_model),
+    formula = formula
+  ))
+}
+```
+
+```{r}
+
+police_results1 <- run_police_force_rf(data = data,mtry = 4,ntree = 600,exclude_cols = c( "Accident_Severity"))
+police_results2 <- run_police_force_rf(data = data,mtry = 8,ntree = 600,exclude_cols = c( "Accident_Severity"))
+police_results3 <- run_police_force_rf(data = data,mtry = 6,ntree = 600,exclude_cols = c( "Accident_Severity"))
+
+police_results1$rmse
+police_results2$rmse
+police_results3$rmse
+```
+
+```         
+```
+
+### Research Question 2: What time of day sees most accidents
+
+```{r}
+
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(randomForest)
+library(caret)  # For confusionMatrix (accuracy metrics)
+
+# 1. Load and clean data (handle missing DateTime)
+dataTime_clean <- dataTime %>%
+  mutate(DateTime = as.POSIXct(paste(Date, Time), format = "%d/%m/%Y %H:%M")) %>%
+  filter(!is.na(DateTime))  # Drop invalid rows
+
+# 2. Create hourly bins (fill gaps with 0 counts)
+hourly_bins <- dataTime_clean %>%
+  mutate(DateTime_floor = floor_date(DateTime, unit = "hour")) %>%
+  complete(
+    DateTime_floor = seq(min(DateTime_floor), max(DateTime_floor), by = "1 hour"),
+    fill = list(AccidentCount = 0)  # Treat missing hours as 0 accidents
+  )
+
+# 3. Feature engineering
+accident_counts <- hourly_bins %>%
+  mutate(
+    Year = year(DateTime_floor),
+    Month = factor(
+      month(DateTime_floor, label = TRUE, abbr = FALSE),
+      levels = month.name,
+      ordered = TRUE
+    ),
+    Day = day(DateTime_floor),
+    Hour = hour(DateTime_floor),
+    TimeOfDay = factor(
+      case_when(
+        Hour >= 5 & Hour < 12 ~ "Morning",
+        Hour >= 12 & Hour < 17 ~ "Afternoon",
+        Hour >= 17 & Hour < 21 ~ "Evening",
+        TRUE ~ "Night"
+      ),
+      levels = c("Morning", "Afternoon", "Evening", "Night"),
+      ordered = TRUE
+    )
+  ) %>%
+  group_by(Year, Month, Day, Hour, TimeOfDay) %>%
+  summarise(AccidentCount = n(), .groups = "drop") %>%
+  mutate(AccidentCount = ifelse(is.na(AccidentCount), 0, AccidentCount))
+
+# 4. Train-test split (80% train, 20% test)
+set.seed(123)
+train_frac <- 0.8
+index <- sample(1:nrow(accident_counts), round(nrow(accident_counts) * train_frac))
+train_data <- accident_counts[index, ]
+test_data <- accident_counts[-index, ]
+
+# 5. Train Random Forest
+rf_model <- randomForest(
+    AccidentCount ~ Hour + TimeOfDay + Month,
+  data = train_data,
+  importance = TRUE,
+  ntree = 500
+)
+
+# 6. Evaluate training accuracy
+train_pred <- predict(rf_model, train_data)
+train_rmse <- sqrt(mean((train_pred - train_data$AccidentCount)^2))
+train_r2 <- cor(train_pred, train_data$AccidentCount)^2
+
+cat("Training RMSE:", train_rmse, "\n")
+cat("Training R-squared:", train_r2, "\n")
+
+# 7. Test evaluation (optional)
+test_pred <- predict(rf_model, test_data)
+test_rmse <- sqrt(mean((test_pred - test_data$AccidentCount)^2))
+test_r2 <- cor(test_pred, test_data$AccidentCount)^2
+
+cat("Test RMSE:", test_rmse, "\n")
+cat("Test R-squared:", test_r2, "\n")
+
+# 8. Model output
+print(rf_model)
+varImpPlot(rf_model)
+```
+
+Attempt 2:\
+
+```{r}
+run_casualty_ridge <- function(data, alpha = 0, lambda = NULL, exclude_cols = NULL, seed = NULL){
+  #' Run Ridge Regression for Number_of_Casualties prediction
+  #'
+  #' @param data Input data frame
+  #' @param alpha 0 for ridge (L2), 1 for lasso (L1)
+  #' @param lambda Regularization strength (if NULL, cv.glmnet will choose)
+  #' @param exclude_cols Vector of column names to exclude from predictors
+  #' @param seed Optional random seed for reproducibility
+  library(glmnet)
+  library(dplyr)
+  
+  # Set seed if provided
+  if (!is.null(seed)) set.seed(seed)
+  
+  # Fixed parameters
+  sample_fraction <- 0.01
+  train_frac <- 0.7
+  target_var <- "Number_of_Casualties"
+  
+  # Sample data
+  reduced_data <- data[sample(nrow(data), size = round(sample_fraction * nrow(data))), ]
+  
+  # Split into train/test
+  index <- sample(1:nrow(reduced_data), round(nrow(reduced_data) * train_frac))
+  train <- reduced_data[index, ]
+  test <- reduced_data[-index, ]
+  
+  # Remove excluded columns and prepare matrices
+  if (!is.null(exclude_cols)) {
+    predictors <- setdiff(names(train), c(target_var, exclude_cols))
+  } else {
+    predictors <- setdiff(names(train), target_var)
+  }
+  
+  x_train <- model.matrix(~ . - 1, train[, predictors])  # -1 removes intercept
+  y_train <- train[[target_var]]
+  x_test <- model.matrix(~ . - 1, test[, predictors])
+  y_test <- test[[target_var]]
+  
+  # Cross-validated Ridge Regression
+  if (is.null(lambda)) {
+    cv_fit <- cv.glmnet(x_train, y_train, alpha = alpha)
+    lambda <- cv_fit$lambda.min
+  }
+  
+  ridge_model <- glmnet(x_train, y_train, alpha = alpha, lambda = lambda)
+  
+  # Generate predictions
+  test_predictions <- predict(ridge_model, newx = x_test)
+  
+  # Calculate metrics
+  rmse <- sqrt(mean((test_predictions - y_test)^2))
+  r_squared <- cor(test_predictions, y_test)^2
+  
+  # Get variable importance (absolute coefficient values)
+  coefs <- coef(ridge_model)[-1, ]  # Remove intercept
+  importance <- data.frame(
+    variable = names(coefs),
+    importance = abs(coefs),
+    row.names = NULL
+  ) %>% arrange(desc(importance))
+  
+  # Plot coefficients
+  plot(ridge_model, xvar = "lambda", label = TRUE)
+  title("Ridge Regression Coefficients", line = 2.5)
+  
+  # Return results
+  return(list(
+    model = ridge_model,
+    cv_fit = if(exists("cv_fit")) cv_fit else NULL,
+    train = train,
+    test = test,
+    predictions = test_predictions,
+    rmse = rmse,
+    r_squared = r_squared,
+    importance = importance,
+    lambda = lambda,
+    formula = paste(target_var, "~", paste(predictors, collapse = " + "))
+  ))
+}
+```
+
+```{r}
+
+results <- run_casualty_ridge(data,exclude_cols = c("Accident_Severity", "Road_Type", "Speed_limit", "Junction_Control","Light_Conditions", "Weather_Conditions", "Road_Surface_Conditions"))
+
+
+
+# Get top 5 important variables
+head(results$importance, 5)
+
+
+```
