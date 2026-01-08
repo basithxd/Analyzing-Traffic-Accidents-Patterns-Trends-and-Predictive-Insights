@@ -1,15 +1,14 @@
 # Analyzing-Traffic-Accidents-Patterns-Trends-and-Predictive-Insights
 A working demo of simple analytical technique to answer 3 research questions
 
-Subject: README.md – 2005–2014 UK Traffic Flow & Accident Analysis
 
 # 2005–2014 UK Traffic Flow and Accident Analysis
 
 ## Overview
 
-This repository contains an analytical and predictive study of road traffic accidents in **England, Scotland, and Wales** using official UK traffic and accident datasets spanning **2005–2014**. The project focuses on identifying patterns, trends, and predictive factors related to accident severity, casualties, police response, and time-of-day accident frequency.
+This repository contains an analytical and predictive study of road traffic accidents in **England, Scotland, and Wales** using official UK traffic and accident datasets spanning **2005–2014**. The project investigates patterns, trends, and predictive factors related to accident severity, casualties, police response, and time-of-day accident frequency.
 
-The analysis is implemented primarily in **R**, using machine learning models such as **Random Forests** and **Ridge Regression**.
+All analysis is conducted within **a single notebook**, implemented primarily in **R**, using machine learning techniques such as **Random Forests** and **Ridge Regression**.
 
 ---
 
@@ -19,13 +18,13 @@ The analysis is implemented primarily in **R**, using machine learning models su
 **Coverage:** 2005–2014
 **Geography:** England, Scotland, Wales
 
-### Key Data Files
+### Data Files
 
 * `accidents_2005_to_2007.csv`
 * `accidents_2009_to_2011.csv`
 * `accidents_2012_to_2014.csv`
 
-These datasets are merged into a single dataframe for analysis.
+The datasets are combined into one unified dataframe during preprocessing.
 
 ---
 
@@ -41,47 +40,47 @@ These datasets are merged into a single dataframe for analysis.
 * Light Conditions
 * Weather Conditions
 * Road Surface Conditions
-* Urban vs Rural Area
+* Urban or Rural Area
 * Police Attendance
 * Date and Time of Accident
 
-All categorical variables are properly factorized, and missing values are handled during preprocessing.
+Categorical variables are converted to factors, and the dataset contains no missing values after cleaning.
 
 ---
 
 ## Research Questions
 
-1. **What factors best predict accident severity?**
-2. **Can the number of casualties be predicted using road and environmental conditions?**
-3. **How accurately can police response presence be forecasted?**
-4. **What time of day experiences the highest accident frequency?**
+1. **Which factors are most predictive of accident severity?**
+2. **Can road and environmental conditions predict the number of casualties?**
+3. **How accurately can police attendance be forecasted?**
+4. **What times of day experience the highest frequency of accidents?**
 
 ---
 
 ## Methods
 
-### Machine Learning Models
+### Models Used
 
 * Random Forest Classification (Accident Severity)
 * Random Forest Regression (Casualties, Police Force)
-* Ridge Regression (Casualty Prediction – Alternative Approach)
+* Ridge Regression (Alternative casualty prediction approach)
 
-### Techniques Used
+### Analytical Techniques
 
-* Feature engineering
-* Train-test splits
-* Subsampling for scalability
+* Data cleaning and feature engineering
+* Train–test splits
+* Subsampling for computational efficiency
 * Variable importance analysis
-* RMSE, R-squared, and accuracy metrics
+* Performance metrics (Accuracy, RMSE, R-squared)
 
 ---
 
 ## Results Summary
 
-* **Accident Severity Prediction Accuracy:** ~84–85%
-* **Casualty Prediction:** Limited explanatory power, indicating high randomness and external factors
-* **Police Response Prediction:** Moderate error with stable RMSE
-* **Time-of-Day Analysis:** Evening and afternoon periods show the highest accident frequencies
+* **Accident Severity Prediction Accuracy:** approximately 84–85%
+* **Casualty Prediction:** low R-squared values, suggesting high variability and external influences
+* **Police Response Prediction:** stable RMSE with moderate predictive accuracy
+* **Time-of-Day Trends:** highest accident counts occur during afternoon and evening periods
 
 ---
 
@@ -108,13 +107,7 @@ doParallel
 │   ├── accidents_2005_to_2007.csv
 │   ├── accidents_2009_to_2011.csv
 │   └── accidents_2012_to_2014.csv
-├── analysis/
-│   ├── preprocessing.R
-│   ├── severity_prediction.R
-│   ├── casualty_prediction.R
-│   └── time_of_day_analysis.R
-├── results/
-│   └── figures_and_outputs/
+├── analysis_notebook.Rmd  (or .ipynb / .R)
 └── README.md
 ```
 
@@ -122,37 +115,26 @@ doParallel
 
 ## How to Run
 
-1. Install required R packages
-2. Place CSV files in the `data/` directory
-3. Run preprocessing scripts
-4. Execute analysis scripts for each research question
+1. Install the required R packages
+2. Place all CSV files in the `data/` directory
+3. Open and run the analysis notebook from top to bottom
 
 ---
 
 ## Use Cases
 
-* Transportation safety analysis
-* Urban planning and policy evaluation
-* Machine learning applications in public safety
-* Academic and educational projects
+* Traffic safety and risk analysis
+* Urban planning and transportation policy
+* Machine learning applications in public-sector data
+* Academic and instructional use
 
 ---
 
 ## License
 
-This project is for **academic and educational purposes**. Dataset ownership remains with the UK Department for Transport.
+This project is intended for **academic and educational purposes only**. Dataset ownership remains with the UK Department for Transport.
 
 ---
 
 ## Authors
-
-
-Basith M and Thanuja B 
-
----
-
-If you want, I can also:
-
-* Make this **shorter or more academic**
-* Customize it for **Kaggle or coursework submission**
-* Add **badges, citations, or data source links**
+Basith M and Thanuja B
